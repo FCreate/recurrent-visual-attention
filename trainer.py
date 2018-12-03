@@ -25,7 +25,18 @@ class Trainer(object):
     config file.
     """
     def __init__(self, config, data_loader):
-        """
+        """- h_t: a 2D tensor of shape (B, hidden_size). The hidden
+          state vector for the current timestep `t`.
+        - mu: a 2D tensor of shape (B, 2). The mean that parametrizes
+          the Gaussian policy.
+        - l_t: a 2D tensor of shape (B, 2). The location vector
+          containing the glimpse coordinates [x, y] for the
+          current timestep `t`.
+        - b_t: a vector of length (B,). The baseline for the
+          current time step `t`.
+        - log_probas: a 2D tensor of shape (B, num_classes). The
+          output log probability vector over the classes.
+        - log_pi: a vector of length (B,).
         Construct a new Trainer instance.
 
         Args
@@ -59,7 +70,7 @@ class Trainer(object):
         else:
             self.test_loader = data_loader
             self.num_test = len(self.test_loader.dataset)
-        self.num_classes = 10
+        self.num_classes = 1
         self.num_channels = 1
 
         # training params
@@ -213,8 +224,11 @@ class Trainer(object):
         tic = time.time()
         with tqdm(total=self.num_train) as pbar:
             for i, (x, y) in enumerate(self.train_loader):
+                x = x.type(torch.FloatTensor)
                 if self.use_gpu:
+                    #x = x.type(torch.cuda.FloatTensor)
                     x, y = x.cuda(), y.cuda()
+
                 x, y = Variable(x), Variable(y)
 
                 plot = False
@@ -235,50 +249,65 @@ class Trainer(object):
                 baselines = []
                 for t in range(self.num_glimpses - 1):
                     # forward pass through model
-                    h_t, l_t, b_t, p = self.model(x, l_t, h_t)
+                    h_t, l_t, p = self.model(x, l_t, h_t)
 
                     # store
                     locs.append(l_t[0:9])
-                    baselines.append(b_t)
+                    #baselines.append(b_t)
                     log_pi.append(p)
 
                 # last iteration
-                h_t, l_t, b_t, log_probas, p = self.model(
+                h_t, l_t, log_probas, p = self.model(
                     x, l_t, h_t, last=True
                 )
+                #print (log_probas.shape)
                 log_pi.append(p)
-                baselines.append(b_t)
+                #baselines.append(b_t)
                 locs.append(l_t[0:9])
 
                 # convert list to tensors and reshape
-                baselines = torch.stack(baselines).transpose(1, 0)
+                #baselines = torch.stack(baselines).transpose(1, 0)
+                y = y.type(torch.FloatTensor)
                 log_pi = torch.stack(log_pi).transpose(1, 0)
+                R = F.cosine_similarity(log_probas.squeeze(), y, dim =0)
+                loss_reinforce = torch.sum(-log_pi * R, dim=1)
+                loss_reinforce = torch.mean(loss_reinforce, dim=0)
+                loss_action = F.mse_loss(log_probas.squeeze(),y)
+                print (f"Loss action {loss_action}")
+                print(f"Loss reinforce {loss_reinforce}")
+                loss = loss_reinforce+loss_action
+
+
 
                 # calculate reward
-                predicted = torch.max(log_probas, 1)[1]
-                R = (predicted.detach() == y).float()
-                R = R.unsqueeze(1).repeat(1, self.num_glimpses)
+                #predicted = torch.max(log_probas, 1)[1]
+                #R = (predicted.detach() == y).float()
+                #R = R.unsqueeze(1).repeat(1, self.num_glimpses)
 
                 # compute losses for differentiable modules
-                loss_action = F.nll_loss(log_probas, y)
-                loss_baseline = F.mse_loss(baselines, R)
 
+                #loss_action = F.nll_loss(log_probas, y)
+
+                #loss_baseline = F.mse_loss(baselines, y)
+                #loss_action = loss_baseline
                 # compute reinforce loss
                 # summed over timesteps and averaged across batch
-                adjusted_reward = R - baselines.detach()
-                loss_reinforce = torch.sum(-log_pi*adjusted_reward, dim=1)
-                loss_reinforce = torch.mean(loss_reinforce, dim=0)
+                #adjusted_reward = R - baselines.detach()
+                #adjusted_reward = F.cosine_similarity(log_probas.squeeze(), y, dim =0)
+                #loss_reinforce = torch.sum(-log_pi*adjusted_reward, dim=1)
+                #loss_reinforce = torch.sum(-log_pi * adjusted_reward, dim=1)
+                #loss_reinforce = torch.mean(loss_reinforce, dim=0)
 
                 # sum up into a hybrid loss
-                loss = loss_action + loss_baseline + loss_reinforce
-
+                #loss = loss_action + loss_baseline + loss_reinforce
+                #loss = 1-adjusted_reward
                 # compute accuracy
-                correct = (predicted == y).float()
-                acc = 100 * (correct.sum() / len(y))
-
+                #correct = (predicted == y).float()
+                acc = F.mse_loss(log_probas.squeeze(), y)
+                #loss = acc
                 # store
-                losses.update(loss.data[0], x.size()[0])
-                accs.update(acc.data[0], x.size()[0])
+                #losses.update(loss.data[0], x.size()[0])
+                #accs.update(acc.data[0], x.size()[0])
 
                 # compute gradients and update SGD
                 self.optimizer.zero_grad()
@@ -335,6 +364,8 @@ class Trainer(object):
         accs = AverageMeter()
 
         for i, (x, y) in enumerate(self.valid_loader):
+            x = x.type(torch.FloatTensor)
+            y = y.type(torch.FloatTensor)
             if self.use_gpu:
                 x, y = x.cuda(), y.cuda()
             x, y = Variable(x), Variable(y)
@@ -351,21 +382,21 @@ class Trainer(object):
             baselines = []
             for t in range(self.num_glimpses - 1):
                 # forward pass through model
-                h_t, l_t, b_t, p = self.model(x, l_t, h_t)
+                h_t, l_t, p = self.model(x, l_t, h_t)
 
                 # store
-                baselines.append(b_t)
+                #baselines.append(b_t)
                 log_pi.append(p)
 
             # last iteration
-            h_t, l_t, b_t, log_probas, p = self.model(
+            h_t, l_t, log_probas, p = self.model(
                 x, l_t, h_t, last=True
             )
             log_pi.append(p)
-            baselines.append(b_t)
+            #baselines.append(b_t)
 
             # convert list to tensors and reshape
-            baselines = torch.stack(baselines).transpose(1, 0)
+            #baselines = torch.stack(baselines).transpose(1, 0)
             log_pi = torch.stack(log_pi).transpose(1, 0)
 
             # average
@@ -374,36 +405,49 @@ class Trainer(object):
             )
             log_probas = torch.mean(log_probas, dim=0)
 
-            baselines = baselines.contiguous().view(
+            '''baselines = baselines.contiguous().view(
                 self.M, -1, baselines.shape[-1]
             )
             baselines = torch.mean(baselines, dim=0)
-
+            '''
             log_pi = log_pi.contiguous().view(
                 self.M, -1, log_pi.shape[-1]
             )
             log_pi = torch.mean(log_pi, dim=0)
+            y = y.type(torch.FloatTensor)
+            R = F.cosine_similarity(log_probas.squeeze(), y, dim=0)
+            loss_reinforce = torch.sum(-log_pi * R, dim=1)
+            loss_reinforce = torch.mean(loss_reinforce, dim=0)
+            loss_action = F.mse_loss(log_probas.squeeze(), y)
+            loss = loss_reinforce + loss_action
+
+            '''#baselines = torch.stack(baselines).transpose(1, 0)
+            #log_pi = torch.stack(log_pi).transpose(1, 0)
 
             # calculate reward
-            predicted = torch.max(log_probas, 1)[1]
-            R = (predicted.detach() == y).float()
-            R = R.unsqueeze(1).repeat(1, self.num_glimpses)
+            # predicted = torch.max(log_probas, 1)[1]
+            # R = (predicted.detach() == y).float()
+            # R = R.unsqueeze(1).repeat(1, self.num_glimpses)
 
             # compute losses for differentiable modules
-            loss_action = F.nll_loss(log_probas, y)
-            loss_baseline = F.mse_loss(baselines, R)
+            y = y.type(torch.FloatTensor)
+            # loss_action = F.nll_loss(log_probas, y)
 
+            # loss_baseline = F.mse_loss(baselines, y)
+            # loss_action = loss_baseline
             # compute reinforce loss
-            adjusted_reward = R - baselines.detach()
-            loss_reinforce = torch.sum(-log_pi*adjusted_reward, dim=1)
+            # summed over timesteps and averaged across batch
+            # adjusted_reward = R - baselines.detach()
+            adjusted_reward = F.cosine_similarity(log_probas.squeeze(), y, dim=0)
+            loss_reinforce = torch.sum(-log_pi * adjusted_reward, dim=1)
             loss_reinforce = torch.mean(loss_reinforce, dim=0)
 
             # sum up into a hybrid loss
-            loss = loss_action + loss_baseline + loss_reinforce
-
+            # loss = loss_action + loss_baseline + loss_reinforce
+            loss = loss_reinforce
             # compute accuracy
-            correct = (predicted == y).float()
-            acc = 100 * (correct.sum() / len(y))
+            # correct = (predicted == y).float()'''
+            acc = F.mse_loss(log_probas.squeeze(), y)
 
             # store
             losses.update(loss.data[0], x.size()[0])

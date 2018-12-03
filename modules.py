@@ -210,6 +210,7 @@ class glimpse_network(nn.Module):
         l_t_prev = l_t_prev.view(l_t_prev.size(0), -1)
 
         # feed phi and l to respective fc layers
+        print(phi.type())
         phi_out = F.relu(self.fc1(phi))
         l_out = F.relu(self.fc2(l_t_prev))
 
@@ -298,7 +299,9 @@ class action_network(nn.Module):
         self.fc = nn.Linear(input_size, output_size)
 
     def forward(self, h_t):
-        a_t = F.log_softmax(self.fc(h_t), dim=1)
+        #a_t = F.log_softmax(self.fc(h_t), dim=1)
+        a_t = self.fc(h_t)
+        #print (a_t.shape)
         return a_t
 
 

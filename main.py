@@ -3,7 +3,7 @@ import torch
 from trainer import Trainer
 from config import get_config
 from utils import prepare_dirs, save_config
-from data_loader import get_test_loader, get_train_valid_loader
+from my_data_loader import get_test_loader, get_train_valid_loader
 
 
 def main(config):
@@ -31,6 +31,9 @@ def main(config):
         )
 
     # instantiate trainer
+    print ("Cuda testing")
+    if (torch.cuda.is_available()):
+        print("Ura")
     trainer = Trainer(config, data_loader)
 
     # either train

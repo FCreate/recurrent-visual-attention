@@ -1,3 +1,7 @@
+from torch.utils.data import Dataset, DataLoader
+import pandas as pd
+import numpy as np
+from skimage import io, transform
 import numpy as np
 from utils import plot_images
 
@@ -5,6 +9,33 @@ import torch
 from torchvision import datasets
 from torchvision import transforms
 from torch.utils.data.sampler import SubsetRandomSampler
+import os
+
+class ToxicDataset(Dataset):
+    def __init__(self, csv_file, root_dir, transform=None):
+        self.max_tox = pd.read_csv(csv_file)
+        self.max_tox=np.array(self.max_tox['0'])
+        self.root_dir = root_dir
+        self.transform = transform
+    def __len__(self):
+        return len(self.max_tox)
+    def __getitem__(self, idx):
+        img_name = os.path.join(self.root_dir,
+                                str(idx)+'.png')
+        image = io.imread(img_name)
+        image = image[np.newaxis, :, :]
+        image.astype(float)
+        sample= {'image':image, 'y':self.max_tox[idx]}
+
+        if self.transform:
+            sample = self.transform
+        return sample['image'], sample['y']
+
+
+#ds = ToxicDataset(csv_file="../Toxicity/max_tox.csv", root_dir="../Data/")
+
+
+
 
 
 def get_train_valid_loader(data_dir,
@@ -45,15 +76,17 @@ def get_train_valid_loader(data_dir,
     assert ((valid_size >= 0) and (valid_size <= 1)), error_msg
 
     # define transforms
-    normalize = transforms.Normalize((0.1307,), (0.3081,))
+    #normalize = transforms.Normalize((0.1307,), (0.3081,))
     trans = transforms.Compose([
-        transforms.ToTensor(), normalize,
+        transforms.ToTensor()#, normalize,
     ])
 
     # load dataset
-    dataset = datasets.MNIST(
+
+    dataset1 = datasets.MNIST(
         data_dir, train=True, download=True, transform=trans
     )
+    dataset = ToxicDataset(csv_file="../Toxicity/max_tox.csv", root_dir="../Data/")
 
     num_train = len(dataset)
     indices = list(range(num_train))
@@ -116,9 +149,9 @@ def get_test_loader(data_dir,
     - data_loader: test set iterator.
     """
     # define transforms
-    normalize = transforms.Normalize((0.1307,), (0.3081,))
+    #normalize = transforms.Normalize((0.1307,), (0.3081,))
     trans = transforms.Compose([
-        transforms.ToTensor(), normalize,
+        transforms.ToTensor()#, normalize,
     ])
 
     # load dataset
@@ -132,3 +165,14 @@ def get_test_loader(data_dir,
     )
 
     return data_loader
+
+
+
+'''for i in range(len(ds)):
+    sample = ds[i]
+    #print (type(sample['image']))
+    print (i, sample['image'].shape, sample['y'])
+    if i==3:
+        break
+
+data_loader = DataLoader(ds,batch_size = 4, shuffle = True)'''

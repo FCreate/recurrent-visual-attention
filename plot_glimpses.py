@@ -1,6 +1,8 @@
 import pickle
 import argparse
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -35,10 +37,13 @@ def main(plot_dir, epoch):
     num_cols = glimpses.shape[0]
     img_shape = glimpses.shape[1]
 
+    print (len(glimpses))
+
+
     # denormalize coordinates
     coords = [denormalize(img_shape, l) for l in locations]
 
-    fig, axs = plt.subplots(nrows=1, ncols=num_cols)
+    fig, axs = plt.subplots(nrows=3, ncols=3)
     # fig.set_dpi(100)
 
     # plot base image
@@ -60,13 +65,18 @@ def main(plot_dir, epoch):
             ax.add_patch(rect)
 
     # animate
+    Writer = animation.writers['ffmpeg']
+    writer = Writer(metadata=dict(artist='Me'))
     anim = animation.FuncAnimation(
         fig, updateData, frames=num_anims, interval=500, repeat=True
     )
 
     # save as mp4
-    name = plot_dir + 'epoch_{}.mp4'.format(epoch)
-    anim.save(name, extra_args=['-vcodec', 'h264', '-pix_fmt', 'yuv420p'])
+    name = plot_dir + 'epoch_{}.gif'.format(epoch)
+    print (name)
+    anim.save('video.mp4', writer=writer)
+    #anim.save(name, writer='ffmpeg', codec='rawvideo')
+    #anim.save(name, extra_args=['-vcodec', 'h264', '-pix_fmt', 'yuv420p'])
 
 
 if __name__ == "__main__":
