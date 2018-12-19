@@ -86,7 +86,7 @@ def get_train_valid_loader(data_dir,
     dataset1 = datasets.MNIST(
         data_dir, train=True, download=True, transform=trans
     )
-    dataset = ToxicDataset(csv_file="../Toxicity/max_tox.csv", root_dir="../Data/")
+    dataset = ToxicDataset(csv_file="../max_tox.csv", root_dir="../Data/")
 
     num_train = len(dataset)
     indices = list(range(num_train))
