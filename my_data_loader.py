@@ -13,6 +13,7 @@ import os
 
 class ToxicDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
+        print (csv_file)
         self.max_tox = pd.read_csv(csv_file)
         self.max_tox=np.array(self.max_tox['0'])
         self.root_dir = root_dir
